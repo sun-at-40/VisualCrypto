@@ -109,6 +109,8 @@ def process():
                 param_values[param_key] = int(request.form.get(param_key, param_config.get("default", 0)))
             elif param_config["type"] == "select":
                 param_values[param_key] = request.form.get(param_key, param_config.get("default"))
+            elif param_config["type"] == "text":
+                param_values[param_key] = request.form.get(param_key, param_config.get("default", ""))
             # Here it is possible to add other types of requirements for new schemes
 
         # Call the appropriate method dynamically
@@ -120,6 +122,8 @@ def process():
         elif operation == "decryption":
             decrypt_method = algorithm_module.get("decrypt")
             result = decrypt_method(*images, *param_values.values())  # Pass images first, then only parameter values
+            if algorithm_module.get("result_type") == "text":
+                return render_template('dec_result.html', decrypted_text=result)
             return save_and_render_decryption_result(result, algorithm_module.get("extension"))
 
     except Exception as e:

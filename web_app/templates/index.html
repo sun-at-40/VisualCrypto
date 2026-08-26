@@ -161,7 +161,7 @@
 
                     // Remove previous dynamically inserted elements
                     let nextElement = operationSelect.nextElementSibling;
-                    while (nextElement && (nextElement.tagName === "LABEL" || nextElement.tagName === "INPUT" || nextElement.tagName === "SELECT")) {
+                    while (nextElement && (nextElement.tagName === "LABEL" || nextElement.tagName === "INPUT" || nextElement.tagName === "SELECT" || nextElement.tagName === "TEXTAREA")) {
                         let toRemove = nextElement;
                         nextElement = nextElement.nextElementSibling;
                         toRemove.remove();
@@ -199,6 +199,14 @@
                                 }
                                 inputElement.appendChild(option);
                             });
+                        }
+                        else if (paramConfig.type === "text") {
+                            inputElement = document.createElement("textarea");
+                            inputElement.name = paramKey;
+                            inputElement.id = paramKey;
+                            inputElement.value = paramConfig.default || "";
+                            inputElement.required = true;
+                            inputElement.rows = 6;
                         }
                         // Here it is possible to add other type of requirements for new schemes
 

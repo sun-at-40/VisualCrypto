@@ -10,6 +10,14 @@
 <body>
     <div class="container">
         <h1>Decryption Result</h1>
+        {% if decrypted_text is defined %}
+        <div class="image-container text-result-container">
+            <div>
+                <h2>Decrypted Text</h2>
+                <pre class="decrypted-text">{{ decrypted_text }}</pre>
+            </div>
+        </div>
+        {% else %}
         <div class="image-container">
             <div>
                 <h2>Decrypted Image</h2>
@@ -17,6 +25,7 @@
                 <a class="button" href="{{ result_download }}" download>Download Result</a>
             </div>
         </div>
+        {% endif %}
         <a class="button back-button" href="/">Back to Home</a>
     </div>
 </body>

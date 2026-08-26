@@ -55,6 +55,36 @@ h2 {
     margin-bottom: 10px;
 }
 
+.text-result-container {
+    justify-content: stretch;
+}
+
+.image-container .text-result-container {
+    width: 100%;
+}
+
+.text-result-container div {
+    max-width: none;
+    width: 100%;
+}
+
+.decrypted-text {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: left;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: #f8fafc;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
 /* Buttons */
 .button {
     display: inline-block;
