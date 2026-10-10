@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101829">
+    <title>VisualCrypto | Text ↔ QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}">
+</head>
+<body>
+    {% include "_navigation.html" %}
+    <main class="page-shell page-narrow">
+        <section class="page-intro">
+            <p class="eyebrow">TEXT ↔ QR CONVERTER</p>
+            <h1>Turn text into a QR code, and back.</h1>
+            <p>Generate a scannable QR code from any UTF-8 text, or upload a QR image to read its content.</p>
+        </section>
+
+        {% if error_message %}
+        <div class="alert alert-error" role="alert">{{ error_message }}</div>
+        {% endif %}
+
+        {% if result and result.operation == "generate" %}
+        <section class="panel result-panel">
+            <div class="section-heading">
+                <div><p class="eyebrow">QR CODE READY</p><h2>Your QR code</h2></div>
+                <span class="status-pill">PNG</span>
+            </div>
+            <article class="image-card">
+                <img src="{{ result.qr_url }}" alt="Generated QR code" style="background:#fff;max-width:320px">
+                <a class="button button-secondary" href="{{ result.qr_url }}" download="qr-code.png">Download QR code</a>
+            </article>
+        </section>
+        {% elif result and result.operation == "decode" %}
+        <section class="panel result-panel">
+            <p class="eyebrow">QR DECODED</p>
+            <h2>Text found in the QR code</h2>
+            <pre class="decrypted-message">{{ result.text }}</pre>
+        </section>
+        {% endif %}
+
+        <section class="workflow-grid">
+            <article class="panel workflow-panel">
+                <span class="step-badge">01 <span>/ TEXT → QR</span></span>
+                <h2>Generate a QR code</h2>
+                <p class="muted-copy">Enter text or a link. Higher error correction makes the code more tolerant to damage but denser.</p>
+                <form action="{{ url_for('text_qr') }}" method="post" class="stack-form">
+                    <input type="hidden" name="operation" value="generate">
+                    <div class="field">
+                        <label for="qrText">Text</label>
+                        <textarea id="qrText" name="text" rows="5" maxlength="2000" placeholder="Text or URL to encode…" required></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="errorLevel">Error correction</label>
+                        <select id="errorLevel" name="error_level">
+                            <option value="L">Low (~7%)</option>
+                            <option value="M" selected>Medium (~15%)</option>
+                            <option value="Q">Quartile (~25%)</option>
+                            <option value="H">High (~30%)</option>
+                        </select>
+                    </div>
+                    <button class="button button-primary" type="submit">Generate QR code <span aria-hidden="true">→</span></button>
+                </form>
+            </article>
+
+            <article class="panel workflow-panel">
+                <span class="step-badge">02 <span>/ QR → TEXT</span></span>
+                <h2>Decode a QR code</h2>
+                <p class="muted-copy">Upload an image containing a single QR code to read its text.</p>
+                <form action="{{ url_for('text_qr') }}" method="post" enctype="multipart/form-data" class="stack-form">
+                    <input type="hidden" name="operation" value="decode">
+                    <div class="field">
+                        <label for="qrImage">QR code image</label>
+                        <input id="qrImage" type="file" name="image" accept="image/*" required>
+                    </div>
+                    <button class="button button-primary" type="submit">Decode QR code <span aria-hidden="true">→</span></button>
+                </form>
+            </article>
+        </section>
+        <footer class="site-footer">UTF-8 text · QR generation with segno · Decoding with OpenCV</footer>
+    </main>
+</body>
+</html>

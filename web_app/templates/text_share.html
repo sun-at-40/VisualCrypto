@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101829">
+    <title>VisualCrypto | Text sharing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}">
+</head>
+<body>
+    {% include "_navigation.html" %}
+    <main class="page-shell page-narrow">
+        <section class="page-intro">
+            <p class="eyebrow">TEXT SECRET SHARING</p>
+            <h1>Keep a message between two shares.</h1>
+            <p>Encode any UTF-8 message into a pair of PNG shares. Both matching shares are needed to recover it.</p>
+        </section>
+
+        {% if error_message %}
+        <div class="alert alert-error" role="alert">{{ error_message }}</div>
+        {% endif %}
+
+        {% if result and result.operation == "encryption" %}
+        <section class="panel result-panel">
+            <div class="section-heading">
+                <div><p class="eyebrow">SHARES CREATED</p><h2>Your message is now split</h2></div>
+                <span class="status-pill">2 shares</span>
+            </div>
+            <p class="muted-copy">Keep both PNG files. Each share is random-looking and cannot reconstruct the message alone.</p>
+            <div class="result-grid">
+                {% for share_url in result.share_urls %}
+                <article class="image-card">
+                    <h3>Share {{ loop.index }}</h3>
+                    <img src="{{ share_url }}" alt="Text secret share {{ loop.index }}">
+                    <a class="button button-secondary" href="{{ share_url }}" download="text-share-{{ loop.index }}.png">Download share {{ loop.index }}</a>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% elif result and result.operation == "decryption" %}
+        <section class="panel result-panel">
+            <p class="eyebrow">MESSAGE RECONSTRUCTED</p>
+            <h2>Your recovered message</h2>
+            <pre class="decrypted-message">{{ result.text }}</pre>
+        </section>
+        {% endif %}
+
+        <section class="workflow-grid">
+            <article class="panel workflow-panel">
+                <span class="step-badge">01 <span>/ CREATE</span></span>
+                <h2>Create text shares</h2>
+                <p class="muted-copy">Enter the message you want to protect. Download both generated PNG shares.</p>
+                <form action="{{ url_for('text_share') }}" method="post" class="stack-form">
+                    <input type="hidden" name="operation" value="encryption">
+                    <div class="field">
+                        <label for="secretText">Secret message</label>
+                        <textarea id="secretText" name="text" rows="5" maxlength="50000" placeholder="Write a message to split into two shares…" required></textarea>
+                    </div>
+                    <button class="button button-primary" type="submit">Create two shares <span aria-hidden="true">→</span></button>
+                </form>
+            </article>
+
+            <article class="panel workflow-panel">
+                <span class="step-badge">02 <span>/ REVEAL</span></span>
+                <h2>Reconstruct a message</h2>
+                <p class="muted-copy">Upload the two PNG shares created together. Both are required to decode the message.</p>
+                <form action="{{ url_for('text_share') }}" method="post" enctype="multipart/form-data" class="stack-form">
+                    <input type="hidden" name="operation" value="decryption">
+                    <div class="field">
+                        <label for="image1">First share</label>
+                        <input id="image1" type="file" name="image1" accept="image/*" required>
+                    </div>
+                    <div class="field">
+                        <label for="image2">Second share</label>
+                        <input id="image2" type="file" name="image2" accept="image/*" required>
+                    </div>
+                    <button class="button button-primary" type="submit">Reconstruct message <span aria-hidden="true">→</span></button>
+                </form>
+            </article>
+        </section>
+        <footer class="site-footer">UTF-8 text · Two-share XOR scheme · PNG output</footer>
+    </main>
+</body>
+</html>

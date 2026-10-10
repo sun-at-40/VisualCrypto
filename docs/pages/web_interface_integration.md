@@ -7,6 +7,15 @@ The web interface is designed to **dynamically adapt** to newly added VSS scheme
 
 This automation eliminates the need for hardcoded UI modifications, making it scalable and easy to maintain.
 
+## Built-in Workflows
+The web application provides three pages from the shared navigation:
+
+- **Image sharing** (`/`): choose an image-based VC or RG scheme and create or reconstruct shares.
+- **Text sharing** (`/text-share`): encode UTF-8 text into two PNG shares, or upload the matching pair to recover it.
+- **Compare schemes** (`/compare`): run selected image schemes against the same input and view each reconstruction, encryption/reconstruction time, and combined PNG share size.
+
+The comparison page uses each algorithm's declared image mode and parameter defaults. Its timings describe the current run and machine; they are not security or image-quality scores.
+
 ## Required Support Functions
 To enable integration and compatibility with the web interface, your VC or RG script must implement three essential support functions:
 

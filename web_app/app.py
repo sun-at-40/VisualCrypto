@@ -1,6 +1,18 @@
-from PIL import Image
-from flask import Flask, render_template, request, url_for, jsonify
 import os
+from io import BytesIO
+from time import perf_counter
+from uuid import uuid4
+
+import segno
+from flask import Flask, jsonify, render_template, request, url_for
+from PIL import Image, ImageOps
+
+try:
+    import cv2
+    import numpy as np
+except ImportError:  # QR decoding is optional
+    cv2 = None
+    np = None
 
 from .algo_interface import ALGORITHM_MODULES
 
@@ -16,14 +28,253 @@ os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 # Route for the main page
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('dashboard.html')
 
 
 # Route that returns the list of algorithms available
 @app.route('/api/algorithm_list', methods=['GET'])
 def get_algorithms():
-    algorithms = {key: value["name"] for key, value in ALGORITHM_MODULES.items()}  # Extract key and name
+    algorithms = {
+        key: value["name"]
+        for key, value in ALGORITHM_MODULES.items()
+        if value.get("result_type") != "text"
+    }
     return jsonify({"algorithms": algorithms})
+
+
+@app.route('/text-share', methods=['GET', 'POST'])
+def text_share():
+    result = None
+    error_message = None
+
+    if request.method == 'POST':
+        operation = request.form.get('operation')
+        try:
+            text_module = ALGORITHM_MODULES["tc_utf8_xor"]
+            run_id = uuid4().hex
+
+            if operation == "encryption":
+                shares = text_module["encrypt"](request.form.get("text", ""))
+                share_urls = []
+                for index, share in enumerate(shares, start=1):
+                    filename = f"text_{run_id}_share{index}.png"
+                    share.save(os.path.join(app.config['OUTPUT_FOLDER'], filename))
+                    share_urls.append(url_for('static', filename=f'output/{filename}'))
+                result = {"operation": operation, "share_urls": share_urls}
+
+            elif operation == "decryption":
+                first_file = request.files.get("image1")
+                second_file = request.files.get("image2")
+                if (
+                    not first_file
+                    or not first_file.filename
+                    or not second_file
+                    or not second_file.filename
+                ):
+                    raise ValueError("Choose both text-share images before reconstructing the message.")
+
+                with Image.open(first_file.stream) as first_image:
+                    share_one = first_image.convert("L")
+                with Image.open(second_file.stream) as second_image:
+                    share_two = second_image.convert("L")
+                decrypted_text = text_module["decrypt"](share_one, share_two)
+                result = {"operation": operation, "text": decrypted_text}
+
+            else:
+                raise ValueError("Choose whether to create or reconstruct text shares.")
+        except (OSError, ValueError) as error:
+            error_message = str(error)
+
+    return render_template("text_share.html", result=result, error_message=error_message)
+
+
+COMPARE_MAX_SIZE = (128, 128)
+
+
+@app.route('/text-qr', methods=['GET', 'POST'])
+def text_qr():
+    result = None
+    error_message = None
+
+    if request.method == 'POST':
+        operation = request.form.get('operation')
+        try:
+            if operation == "generate":
+                text = request.form.get("text", "")
+                if not text.strip():
+                    raise ValueError("Enter some text to convert into a QR code.")
+                level = request.form.get("error_level", "M")
+                if level not in ("L", "M", "Q", "H"):
+                    level = "M"
+                try:
+                    qr = segno.make(text, error=level, encoding="utf-8")
+                except segno.DataOverflowError as error:
+                    raise ValueError("The text is too long to fit in a QR code.") from error
+                filename = f"qr_{uuid4().hex}.png"
+                qr.save(
+                    os.path.join(app.config['OUTPUT_FOLDER'], filename),
+                    scale=10, border=4, kind="png",
+                )
+                result = {
+                    "operation": operation,
+                    "qr_url": url_for('static', filename=f'output/{filename}'),
+                }
+
+            elif operation == "decode":
+                if cv2 is None:
+                    raise ValueError("QR decoding needs the 'opencv-python-headless' package.")
+                uploaded_file = request.files.get("image")
+                if not uploaded_file or not uploaded_file.filename:
+                    raise ValueError("Choose a QR code image to decode.")
+                with Image.open(uploaded_file.stream) as qr_image:
+                    qr_image.load()
+                    rgb = qr_image.convert("RGB")
+                # A white margin helps the detector find codes cropped tightly.
+                rgb = ImageOps.expand(rgb, border=max(rgb.size) // 10 + 10, fill="white")
+                pixels = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+                decoded, _, _ = cv2.QRCodeDetector().detectAndDecode(pixels)
+                if not decoded:
+                    raise ValueError("No readable QR code was found in that image.")
+                result = {"operation": operation, "text": decoded}
+
+            else:
+                raise ValueError("Choose whether to generate or decode a QR code.")
+        except (OSError, ValueError) as error:
+            error_message = str(error)
+
+    return render_template("text_qr.html", result=result, error_message=error_message)
+
+
+def _comparison_algorithms():
+    return {
+        key: module
+        for key, module in ALGORITHM_MODULES.items()
+        if module.get("result_type") != "text"
+        and callable(module.get("encrypt"))
+        and callable(module.get("decrypt"))
+        and module.get("requirements", {}).get("encryption", {}).get("num_images") == 1
+        and module.get("requirements", {}).get("decryption", {}).get("num_images") == 2
+    }
+
+
+def _default_parameters(module, operation):
+    parameters = module.get("requirements", {}).get(operation, {}).get("parameters", {})
+    values = []
+    for key, config in parameters.items():
+        if "default" in config:
+            values.append(config["default"])
+        elif config.get("type") == "select" and config.get("options"):
+            values.append(config["options"][0])
+        elif config.get("type") == "number":
+            values.append(0)
+        elif config.get("type") == "text":
+            values.append("")
+        else:
+            raise ValueError(f"Cannot determine a default value for parameter '{key}'.")
+    return values
+
+
+def _png_size(image):
+    buffer = BytesIO()
+    _png_compatible(image).save(buffer, format="PNG")
+    return buffer.tell()
+
+
+def _png_compatible(image):
+    return image.convert("RGB") if image.mode == "CMYK" else image
+
+
+@app.route('/compare', methods=['GET', 'POST'])
+def compare():
+    algorithms = _comparison_algorithms()
+    results = None
+    error_message = None
+    selected_algorithms = (
+        request.form.getlist("algorithms")
+        if request.method == "POST"
+        else list(algorithms)
+    )
+
+    if request.method == "POST":
+        try:
+            uploaded_file = request.files.get("image")
+            if not uploaded_file or not uploaded_file.filename:
+                raise ValueError("Choose an image to compare the schemes.")
+
+            selected_algorithms = list(dict.fromkeys(selected_algorithms))
+            if not selected_algorithms:
+                raise ValueError("Select at least one scheme to compare.")
+            if any(key not in algorithms for key in selected_algorithms):
+                raise ValueError("One or more selected schemes are not available for comparison.")
+
+            with Image.open(uploaded_file.stream) as uploaded_image:
+                uploaded_image.load()
+                source_image = uploaded_image.copy()
+
+            # The visual cryptography schemes are pure-Python per-pixel loops,
+            # so large inputs would take minutes; benchmark on a bounded size.
+            source_image.thumbnail(COMPARE_MAX_SIZE)
+
+            run_id = uuid4().hex
+            results = []
+            for algorithm_key in selected_algorithms:
+                module = algorithms[algorithm_key]
+                image_type = module.get("image_type", "RGB")
+                algorithm_image = source_image.convert(image_type)
+
+                encryption_start = perf_counter()
+                shares = module["encrypt"](
+                    algorithm_image,
+                    *_default_parameters(module, "encryption"),
+                )
+                encryption_ms = (perf_counter() - encryption_start) * 1000
+                if not isinstance(shares, (tuple, list)) or len(shares) != 2:
+                    raise ValueError(f"{module['name']} did not produce exactly two shares.")
+
+                reconstruction_start = perf_counter()
+                reconstructed = module["decrypt"](
+                    *shares,
+                    *_default_parameters(module, "decryption"),
+                )
+                reconstruction_ms = (perf_counter() - reconstruction_start) * 1000
+                if not isinstance(reconstructed, Image.Image):
+                    raise ValueError(f"{module['name']} did not produce an image reconstruction.")
+
+                share_size = sum(_png_size(share) for share in shares)
+                file_prefix = f"compare_{run_id}_{algorithm_key}"
+                share_urls = []
+                for index, share in enumerate(shares, start=1):
+                    filename = f"{file_prefix}_share{index}.png"
+                    _png_compatible(share).save(
+                        os.path.join(app.config['OUTPUT_FOLDER'], filename)
+                    )
+                    share_urls.append(url_for('static', filename=f'output/{filename}'))
+
+                reconstruction_filename = f"{file_prefix}_reconstruction.png"
+                _png_compatible(reconstructed).save(
+                    os.path.join(app.config['OUTPUT_FOLDER'], reconstruction_filename)
+                )
+                results.append({
+                    "name": module["name"],
+                    "encryption_ms": encryption_ms,
+                    "reconstruction_ms": reconstruction_ms,
+                    "share_size": share_size,
+                    "share_urls": share_urls,
+                    "reconstruction_url": url_for(
+                        'static', filename=f'output/{reconstruction_filename}'
+                    ),
+                })
+        except (OSError, ValueError) as error:
+            error_message = str(error)
+            results = None
+
+    return render_template(
+        "compare.html",
+        algorithms=algorithms,
+        selected_algorithms=selected_algorithms,
+        results=results,
+        error_message=error_message,
+    )
 
 
 # Route that returns the description of the indicated algorithm

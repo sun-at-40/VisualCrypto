@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101829">
+    <title>VisualCrypto | Image sharing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}">
+</head>
+<body>
+    {% include "_navigation.html" %}
+    <main class="page-shell">
+        <section class="hero">
+            <p class="eyebrow">VISUAL SECRET SHARING TOOLKIT</p>
+            <h1>Split a secret.<br><span>Reveal it together.</span></h1>
+            <p class="hero-copy">Explore visual cryptography and random-grid schemes. Create two image shares or reconstruct a secret with both.</p>
+            <div class="hero-actions">
+                <a class="button button-primary" href="#image-workbench">Open image workbench <span aria-hidden="true">↓</span></a>
+                <a class="button button-quiet" href="{{ url_for('compare') }}">Compare schemes <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="hero-orbit orbit-one" aria-hidden="true"></div>
+            <div class="hero-orbit orbit-two" aria-hidden="true"></div>
+            <div class="hero-pixels" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </section>
+
+        <section class="feature-strip" aria-label="Available workflows">
+            <a class="feature-card" href="{{ url_for('text_share') }}">
+                <span class="feature-icon" aria-hidden="true">Aa</span>
+                <span><strong>Text sharing</strong><small>Protect and restore a UTF-8 message</small></span>
+                <span class="feature-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a class="feature-card" href="{{ url_for('compare') }}">
+                <span class="feature-icon feature-icon-purple" aria-hidden="true">⧉</span>
+                <span><strong>Scheme comparison</strong><small>Compare speed, size, and reconstructions</small></span>
+                <span class="feature-arrow" aria-hidden="true">↗</span>
+            </a>
+        </section>
+
+        <section class="workbench panel" id="image-workbench">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">IMAGE WORKBENCH</p>
+                    <h2>Encrypt or reconstruct an image</h2>
+                </div>
+                <span class="step-badge">01 <span>/ 03</span></span>
+            </div>
+
+            <div id="formError" class="alert alert-error" role="alert" hidden></div>
+            <div class="workbench-grid">
+                <form id="cryptoForm" action="{{ url_for('process') }}" method="post" enctype="multipart/form-data">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="algorithm">Algorithm</label>
+                            <select id="algorithm" name="algorithm" required></select>
+                        </div>
+                        <div class="field">
+                            <label for="operation">Operation</label>
+                            <select name="operation" id="operation" required>
+                                <option value="encryption">Create shares</option>
+                                <option value="decryption">Reconstruct secret</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <section id="algorithmInfo" class="algorithm-info" aria-live="polite" hidden>
+                        <p id="infoMessage"></p>
+                        <div id="infoLinks"></div>
+                    </section>
+
+                    <div id="parameterFields" class="parameter-fields"></div>
+
+                    <div class="field">
+                        <label id="uploadLabel" for="image1">Secret image</label>
+                        <div id="inputImages" class="upload-grid"></div>
+                        <small id="fileHint" class="field-hint">Choose an image to create two shares.</small>
+                    </div>
+                    <button class="button button-primary submit-button" type="submit">Run scheme <span aria-hidden="true">→</span></button>
+                </form>
+
+                <aside class="workbench-aside">
+                    <div class="aside-art" aria-hidden="true">
+                        <div class="share-tile share-tile-back"></div>
+                        <div class="share-tile share-tile-front"></div>
+                        <div class="share-lock">✳</div>
+                    </div>
+                    <h3>Your secret stays split</h3>
+                    <p>Each share looks like noise on its own. Combine both shares to reveal the hidden image.</p>
+                    <ul class="trust-list">
+                        <li><span>✓</span> Choose from VC and RG schemes</li>
+                        <li><span>✓</span> Download each share separately</li>
+                        <li><span>✓</span> Reconstruct with the matching pair</li>
+                    </ul>
+                </aside>
+            </div>
+            <div id="loader" class="loading-state" hidden><span class="spinner"></span><span>Processing your image…</span></div>
+        </section>
+        <footer class="site-footer">VisualCrypto <span>·</span> Visual Secret Sharing toolkit</footer>
+    </main>
+
+    <script>
+        const algorithmSelect = document.getElementById("algorithm");
+        const operationSelect = document.getElementById("operation");
+        const inputImages = document.getElementById("inputImages");
+        const parameterFields = document.getElementById("parameterFields");
+        const formError = document.getElementById("formError");
+
+        async function fetchJson(url) {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "The request could not be completed.");
+            return data;
+        }
+
+        function showError(message) {
+            formError.textContent = message;
+            formError.hidden = false;
+        }
+
+        async function updateAlgorithm() {
+            formError.hidden = true;
+            const key = algorithmSelect.value;
+            if (!key) return;
+            try {
+                const description = await fetchJson(`/api/algorithm_description/${encodeURIComponent(key)}`);
+                document.getElementById("infoMessage").textContent = description.text;
+                const links = document.getElementById("infoLinks");
+                links.replaceChildren();
+                for (const link of description.links || []) {
+                    const anchor = document.createElement("a");
+                    anchor.href = link.url;
+                    anchor.target = "_blank";
+                    anchor.rel = "noopener noreferrer";
+                    anchor.textContent = link.text;
+                    links.appendChild(anchor);
+                }
+                document.getElementById("algorithmInfo").hidden = false;
+                await updateRequirements();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function updateRequirements() {
+            const key = algorithmSelect.value;
+            const operation = operationSelect.value;
+            if (!key) return;
+            try {
+                const requirements = await fetchJson(
+                    `/api/algorithm_requirements/${encodeURIComponent(key)}/${operation}`
+                );
+                inputImages.replaceChildren();
+                parameterFields.replaceChildren();
+
+                for (let index = 1; index <= requirements.num_images; index += 1) {
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.name = `image${index}`;
+                    input.id = `image${index}`;
+                    input.accept = "image/*";
+                    input.required = true;
+                    input.setAttribute("aria-label", `Image ${index}`);
+                    inputImages.appendChild(input);
+                }
+
+                for (const [name, config] of Object.entries(requirements.parameters || {})) {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "field";
+                    const label = document.createElement("label");
+                    label.htmlFor = name;
+                    label.textContent = config.label || name;
+                    let input;
+                    if (config.type === "select") {
+                        input = document.createElement("select");
+                        for (const optionValue of config.options || []) {
+                            const option = document.createElement("option");
+                            option.value = optionValue;
+                            option.textContent = optionValue;
+                            option.selected = optionValue === config.default;
+                            input.appendChild(option);
+                        }
+                    } else {
+                        input = document.createElement("input");
+                        input.type = config.type === "number" ? "number" : "text";
+                        if (config.type === "number" && config.default !== undefined) input.value = config.default;
+                        if (config.type === "text") input.value = config.default || "";
+                    }
+                    input.id = name;
+                    input.name = name;
+                    wrapper.append(label, input);
+                    parameterFields.appendChild(wrapper);
+                }
+
+                const count = requirements.num_images;
+                const reconstructing = operation === "decryption";
+                document.getElementById("uploadLabel").textContent =
+                    count > 1 ? "Share images" : "Secret image";
+                document.getElementById("fileHint").textContent = count === 0
+                    ? "This scheme does not require an image upload."
+                    : reconstructing
+                        ? `Choose ${count} share images to reconstruct the secret.`
+                        : `Choose ${count} image${count === 1 ? "" : "s"} to create shares.`;
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        algorithmSelect.addEventListener("change", updateAlgorithm);
+        operationSelect.addEventListener("change", updateRequirements);
+        document.getElementById("cryptoForm").addEventListener("submit", () => {
+            document.getElementById("loader").hidden = false;
+        });
+
+        (async function initialize() {
+            try {
+                const data = await fetchJson("/api/algorithm_list");
+                for (const [key, name] of Object.entries(data.algorithms)) {
+                    const option = document.createElement("option");
+                    option.value = key;
+                    option.textContent = name;
+                    algorithmSelect.appendChild(option);
+                }
+                if (!algorithmSelect.options.length) {
+                    showError("No image algorithms are available.");
+                    return;
+                }
+                await updateAlgorithm();
+            } catch (error) {
+                showError(error.message);
+            }
+        })();
+    </script>
+</body>
+</html>

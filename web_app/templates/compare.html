@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101829">
+    <title>VisualCrypto | Compare schemes</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}">
+</head>
+<body>
+    {% include "_navigation.html" %}
+    <main class="page-shell">
+        <section class="page-intro">
+            <p class="eyebrow">RESEARCH WORKBENCH</p>
+            <h1>Compare schemes side by side.</h1>
+            <p>Run selected image-based schemes on the same input and compare encryption time, reconstruction time, share size, and visual outputs.</p>
+        </section>
+
+        {% if error_message %}
+        <div class="alert alert-error" role="alert">{{ error_message }}</div>
+        {% endif %}
+
+        <section class="panel compare-form-panel">
+            <div class="section-heading">
+                <div><p class="eyebrow">CONFIGURE A RUN</p><h2>Choose your input and schemes</h2></div>
+                <span class="step-badge">01 <span>/ 02</span></span>
+            </div>
+            <form action="{{ url_for('compare') }}" method="post" enctype="multipart/form-data" class="stack-form">
+                <div class="field">
+                    <label for="compareImage">Image to compare</label>
+                    <input id="compareImage" type="file" name="image" accept="image/*" required>
+                    <small class="field-hint">Each scheme converts the input to its configured image mode. Images are downscaled to fit 128×128 px so the run finishes quickly; the CMYK scheme is the slowest.</small>
+                </div>
+                <fieldset class="scheme-fieldset">
+                    <legend>Image schemes</legend>
+                    <div class="scheme-grid">
+                        {% for key, module in algorithms.items() %}
+                        <label class="scheme-option">
+                            <input type="checkbox" name="algorithms" value="{{ key }}" {% if key in selected_algorithms %}checked{% endif %}>
+                            <span class="scheme-check" aria-hidden="true"></span>
+                            <span><strong>{{ module.name }}</strong><small>Encrypt · reconstruct · measure</small></span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                <button class="button button-primary submit-button" type="submit"><span class="btn-label">Run comparison <span aria-hidden="true">→</span></span></button>
+                <div id="compare-progress" class="progress-wrap" hidden role="status" aria-live="polite">
+                    <div class="loading-state"><span class="spinner"></span><span>Running comparison… this can take a few moments.</span></div>
+                    <div class="progress-bar"><span></span></div>
+                </div>
+            </form>
+            <script>
+                (function () {
+                    var form = document.querySelector(".compare-form-panel form");
+                    form.addEventListener("submit", function () {
+                        var btn = form.querySelector(".submit-button");
+                        // Defer disabling so the form data is still submitted
+                        setTimeout(function () {
+                            btn.disabled = true;
+                            btn.querySelector(".btn-label").textContent = "Running…";
+                        }, 0);
+                        document.getElementById("compare-progress").hidden = false;
+                    });
+                    window.addEventListener("pageshow", function (e) {
+                        if (e.persisted) { window.location.reload(); }
+                    });
+                })();
+            </script>
+        </section>
+
+        {% if results %}
+        <section class="comparison-results">
+            <div class="section-heading">
+                <div><p class="eyebrow">RUN COMPLETE</p><h2>Scheme results</h2></div>
+                <span class="step-badge">02 <span>/ 02</span></span>
+            </div>
+            <div class="comparison-grid">
+                {% for result in results %}
+                <article class="panel comparison-card">
+                    <div class="comparison-title"><h3>{{ result.name }}</h3><span class="status-pill">Complete</span></div>
+                    <div class="metrics-grid">
+                        <div class="metric"><span>Encrypt</span><strong>{{ result.encryption_ms|round(2) }}<small> ms</small></strong></div>
+                        <div class="metric"><span>Reconstruct</span><strong>{{ result.reconstruction_ms|round(2) }}<small> ms</small></strong></div>
+                        <div class="metric"><span>Two shares</span><strong>{{ (result.share_size / 1024)|round(1) }}<small> KB</small></strong></div>
+                    </div>
+                    <div class="comparison-images">
+                        {% for share_url in result.share_urls %}
+                        <figure><img src="{{ share_url }}" alt="{{ result.name }} share {{ loop.index }}"><figcaption>Share {{ loop.index }}</figcaption></figure>
+                        {% endfor %}
+                    </div>
+                    <figure class="reconstruction">
+                        <img src="{{ result.reconstruction_url }}" alt="Reconstruction using {{ result.name }}">
+                        <figcaption>Reconstructed image</figcaption>
+                    </figure>
+                </article>
+                {% endfor %}
+            </div>
+            <p class="measurement-note">Measurements are from this run on this machine; times vary with image content, size, and system load. Share size is the combined PNG size of both output shares.</p>
+        </section>
+        {% endif %}
+        <footer class="site-footer">A practical visual comparison, not a cryptographic security ranking.</footer>
+    </main>
+</body>
+</html>

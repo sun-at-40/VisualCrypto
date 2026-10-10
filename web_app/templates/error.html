@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Error - VisualCrypto</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/error_style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}">
 </head>
 <body>
+    {% include "_navigation.html" %}
     <div class="container">
         <h1>Oops! Something went wrong.</h1>
         <p class="error-message">Error: {{ error_message }}</p>

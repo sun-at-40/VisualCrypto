@@ -1,0 +1,12 @@
+<header class="site-header">
+    <a class="brand" href="{{ url_for('home') }}">
+        <img src="{{ url_for('static', filename='icon.svg') }}" alt="" width="34" height="34">
+        <span>Visual<span class="brand-accent">Crypto</span></span>
+    </a>
+    <nav class="site-nav" aria-label="Main navigation">
+        <a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}aria-current="page"{% endif %}>Image sharing</a>
+        <a href="{{ url_for('text_share') }}" {% if request.endpoint == 'text_share' %}aria-current="page"{% endif %}>Text sharing</a>
+        <a href="{{ url_for('text_qr') }}" {% if request.endpoint == 'text_qr' %}aria-current="page"{% endif %}>Text ↔ QR</a>
+        <a href="{{ url_for('compare') }}" {% if request.endpoint == 'compare' %}aria-current="page"{% endif %}>Compare schemes</a>
+    </nav>
+</header>
